@@ -1,0 +1,38 @@
+[package]
+name = "kmrf"
+version = "0.1.0"
+authors = ["Pierre Marijon <pierre.marijon@hhu.de>"]
+edition = "2018"
+
+[lib]
+name = "kmrf"
+crate-type = ["rlib", "cdylib", "staticlib"]
+
+[[bin]]
+name = "kmrf"
+path = "src/main.rs"
+
+[dependencies]
+bio            = "0.31"
+cocktail       = { git = "https://github.com/natir/cocktail.git" }
+pcon	       = { git = "https://github.com/natir/pcon.git" }
+
+# input output management
+niffler	       = "2"
+
+# CLI management
+clap           = "3.0.0-beta.1"
+
+# Logging and error management
+log 	       = "0.4"
+anyhow         = "1.0"
+thiserror      = "1.0"
+env_logger     = "0.7"
+
+[profile.release]
+#debug = true # uncomment for profiling
+lto = 'thin'
+opt-level = 3
+overflow-checks = false
+panic = 'abort'
+incremental = false
