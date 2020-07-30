@@ -29,8 +29,6 @@ use log::info;
 use kmrf::error::*;
 use kmrf::*;
 
-use std::str::FromStr;
-
 fn main() -> Result<()> {
     let params = cli::Command::parse();
 
@@ -93,7 +91,7 @@ fn main() -> Result<()> {
 
 	    let ratio = (nb_valid as f64) / (nb_kmer as f64);
 	    
-	    info!("reads id {} ratio {}", record.id(), ratio);
+	    info!("{},{}", record.id(), ratio);
 	    
 	    if  ratio >= threshold {
 		write
