@@ -42,6 +42,12 @@ pub enum Error {
     #[error("Error durring read")]
     ErrorDurringRead,
 
+    #[error("You must a solidity path '-s' or a kmer length '-k'")]
+    NoSolidityNoKmer,
+
+    #[error("Can't compute minimal abundance")]
+    CantComputeAbundance,
+
     /// No error, this exist only for C binding it's the value of a new error pointer
     #[error("Isn't error if you see this please contact the author with this message and a description of what you do with pcon")]
     NoError,

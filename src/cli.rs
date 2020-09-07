@@ -21,8 +21,12 @@ SOFTWARE.
  */
 
 /* crate use */
+use anyhow::{anyhow, Context, Result};
 use clap::Clap;
 use log::Level;
+
+/* local use */
+use crate::error::*;
 
 #[derive(Clap, Debug)]
 #[clap(
@@ -36,7 +40,7 @@ pub struct Command {
         long = "solidity",
         about = "solidity bitfield produce by pcon"
     )]
-    pub solidity: String,
+    pub solidity: Option<String>,
 
     #[clap(short = "i", long = "inputs", about = "fasta file to be correct")]
     pub inputs: Vec<String>,
@@ -56,6 +60,13 @@ pub struct Command {
     pub threshold: Option<f64>,
 
     #[clap(
+        short = "k",
+        long = "kmer",
+        about = "kmer length if you didn't provide solidity path you must give a kmer length"
+    )]
+    pub kmer: Option<u8>,
+
+    #[clap(
         short = "v",
         long = "verbosity",
         parse(from_occurrences),
@@ -72,5 +83,45 @@ pub fn i82level(level: i8) -> Option<Level> {
         3 => Some(log::Level::Info),
         4 => Some(log::Level::Debug),
         5..=std::i8::MAX => Some(log::Level::Trace),
+    }
+}
+
+pub fn read_or_compute_solidity(
+    solidity_path: Option<String>,
+    kmer: Option<u8>,
+    inputs: &Vec<String>,
+) -> Result<pcon::solid::Solid> {
+    if let Some(solidity_path) = solidity_path {
+        let solidity_reader = std::io::BufReader::new(
+            std::fs::File::open(&solidity_path)
+                .with_context(|| Error::CantOpenFile)
+                .with_context(|| anyhow!("File {:?}", solidity_path.clone()))?,
+        );
+
+        log::info!("Load solidity file");
+        Ok(pcon::solid::Solid::deserialize(solidity_reader)?)
+    } else if let Some(kmer) = kmer {
+        let mut counter = pcon::counter::Counter::new(kmer);
+
+        log::info!("Start count kmer from input");
+        for input in inputs {
+            let fasta = std::io::BufReader::new(
+                std::fs::File::open(&input)
+                    .with_context(|| Error::CantOpenFile)
+                    .with_context(|| anyhow!("File {:?}", input.clone()))?,
+            );
+
+            counter.count_fasta(fasta);
+        }
+        log::info!("End count kmer from input");
+
+        let abundance =
+            cocktail::curve::found_first_local_min(pcon::dump::compute_spectrum(&counter))
+                .ok_or(Error::CantComputeAbundance)?;
+        log::info!("Min abundance is {}", abundance);
+
+        Ok(pcon::solid::Solid::from_counter(&counter, abundance as u8))
+    } else {
+        Err(Error::NoSolidityNoKmer)?
     }
 }

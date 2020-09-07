@@ -24,8 +24,6 @@ SOFTWARE.
 use anyhow::{anyhow, Context, Result};
 use clap::Clap;
 
-use log::info;
-
 use kmrf::error::*;
 use kmrf::*;
 
@@ -43,12 +41,7 @@ fn main() -> Result<()> {
             .init();
     }
 
-    let solidity_reader = std::io::BufReader::new(
-        std::fs::File::open(&params.solidity)
-            .with_context(|| Error::CantOpenFile)
-            .with_context(|| anyhow!("File {}", params.solidity.clone()))?,
-    );
-    let solid = pcon::solid::Solid::deserialize(solidity_reader)?;
+    let solid = cli::read_or_compute_solidity(params.solidity, params.kmer, &params.inputs)?;
 
     let threshold = if let Some(val) = params.threshold {
         val
@@ -57,7 +50,7 @@ fn main() -> Result<()> {
     };
 
     for (input, output) in params.inputs.iter().zip(params.outputs) {
-        info!("Read file {} write in {}", input, output);
+        log::info!("Read file {} write in {}", input, output);
 
         let reader = bio::io::fasta::Reader::new(std::io::BufReader::new(
             std::fs::File::open(input)
@@ -73,32 +66,31 @@ fn main() -> Result<()> {
 
         let mut records = reader.records();
         while let Some(Ok(record)) = records.next() {
+            if record.seq().len() < solid.k as usize {
+                continue;
+            }
 
-	    if record.seq().len() < solid.k as usize {
-		continue
-	    }
-	    
-	    let mut nb_kmer = 0;
-	    let mut nb_valid = 0;
+            let mut nb_kmer = 0;
+            let mut nb_valid = 0;
 
-	    for cano in cocktail::tokenizer::Canonical::new(record.seq(), solid.k) {
-		nb_kmer += 1;
-		
-		if solid.get_canonic(cano) {
-		    nb_valid += 1;
-		}
-	    }
+            for cano in cocktail::tokenizer::Canonical::new(record.seq(), solid.k) {
+                nb_kmer += 1;
 
-	    let ratio = (nb_valid as f64) / (nb_kmer as f64);
-	    
-	    info!("{},{}", record.id(), ratio);
-	    
-	    if  ratio >= threshold {
-		write
+                if solid.get_canonic(cano) {
+                    nb_valid += 1;
+                }
+            }
+
+            let ratio = (nb_valid as f64) / (nb_kmer as f64);
+
+            log::debug!("{},{}", record.id(), ratio);
+
+            if ratio >= threshold {
+                write
                     .write_record(&record)
                     .with_context(|| Error::ErrorDurringWrite)
                     .with_context(|| anyhow!("File {}", input.clone()))?;
-	    }
+            }
         }
     }
 
