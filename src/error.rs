@@ -42,7 +42,7 @@ pub enum Error {
     #[error("Error durring read")]
     ErrorDurringRead,
 
-    #[error("You must a solidity path '-s' or a kmer length '-k'")]
+    #[error("You must provide a solidity path '-s' or a kmer length '-k'")]
     NoSolidityNoKmer,
 
     #[error("Can't compute minimal abundance")]

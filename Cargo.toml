@@ -17,6 +17,9 @@ bio            = "0.31"
 cocktail       = { git = "https://github.com/natir/cocktail.git" }
 pcon	       = { git = "https://github.com/natir/pcon.git" }
 
+# parallel
+rayon           = "1"
+
 # input output management
 niffler	       = "2"
 

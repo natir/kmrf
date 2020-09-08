@@ -53,11 +53,11 @@ pub struct Command {
     pub outputs: Vec<String>,
 
     #[clap(
-        short = "t",
-        long = "threshold",
+        short = "r",
+        long = "ratio",
         about = "if a ratio of correct kmer on all kmer is lower than this threshold read is filter out, default 0.8"
     )]
-    pub threshold: Option<f64>,
+    pub ratio: Option<f64>,
 
     #[clap(
         short = "k",
@@ -65,6 +65,20 @@ pub struct Command {
         about = "kmer length if you didn't provide solidity path you must give a kmer length"
     )]
     pub kmer: Option<u8>,
+
+    #[clap(
+        short = "t",
+        long = "threads",
+        about = "Number of thread use by br, 0 use all avaible core, default value 0"
+    )]
+    pub threads: Option<usize>,
+
+    #[clap(
+        short = "b",
+        long = "record_buffer",
+        about = "Number of sequence record load in buffer, default 8192"
+    )]
+    pub record_buffer: Option<usize>,
 
     #[clap(
         short = "v",
@@ -90,6 +104,7 @@ pub fn read_or_compute_solidity(
     solidity_path: Option<String>,
     kmer: Option<u8>,
     inputs: &Vec<String>,
+    record_buffer_len: usize,
 ) -> Result<pcon::solid::Solid> {
     if let Some(solidity_path) = solidity_path {
         let solidity_reader = std::io::BufReader::new(
@@ -101,7 +116,7 @@ pub fn read_or_compute_solidity(
         log::info!("Load solidity file");
         Ok(pcon::solid::Solid::deserialize(solidity_reader)?)
     } else if let Some(kmer) = kmer {
-        let mut counter = pcon::counter::Counter::new(kmer);
+        let mut counter = pcon::counter::Counter::new(kmer, record_buffer_len);
 
         log::info!("Start count kmer from input");
         for input in inputs {

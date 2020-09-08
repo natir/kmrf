@@ -21,10 +21,9 @@ SOFTWARE.
  */
 
 /* crate use */
-use anyhow::{anyhow, Context, Result};
+use anyhow::Result;
 use clap::Clap;
 
-use kmrf::error::*;
 use kmrf::*;
 
 fn main() -> Result<()> {
@@ -41,58 +40,28 @@ fn main() -> Result<()> {
             .init();
     }
 
-    let solid = cli::read_or_compute_solidity(params.solidity, params.kmer, &params.inputs)?;
-
-    let threshold = if let Some(val) = params.threshold {
+    let ratio = if let Some(val) = params.ratio {
         val
     } else {
         0.9
     };
 
-    for (input, output) in params.inputs.iter().zip(params.outputs) {
-        log::info!("Read file {} write in {}", input, output);
+    if let Some(threads) = params.threads {
+        log::info!("Set number of threads to {}", threads);
 
-        let reader = bio::io::fasta::Reader::new(std::io::BufReader::new(
-            std::fs::File::open(input)
-                .with_context(|| Error::CantOpenFile)
-                .with_context(|| anyhow!("File {}", input.clone()))?,
-        ));
-
-        let mut write = bio::io::fasta::Writer::new(std::io::BufWriter::new(
-            std::fs::File::create(&output)
-                .with_context(|| Error::CantCreateFile)
-                .with_context(|| anyhow!("File {}", output.clone()))?,
-        ));
-
-        let mut records = reader.records();
-        while let Some(Ok(record)) = records.next() {
-            if record.seq().len() < solid.k as usize {
-                continue;
-            }
-
-            let mut nb_kmer = 0;
-            let mut nb_valid = 0;
-
-            for cano in cocktail::tokenizer::Canonical::new(record.seq(), solid.k) {
-                nb_kmer += 1;
-
-                if solid.get_canonic(cano) {
-                    nb_valid += 1;
-                }
-            }
-
-            let ratio = (nb_valid as f64) / (nb_kmer as f64);
-
-            log::debug!("{},{}", record.id(), ratio);
-
-            if ratio >= threshold {
-                write
-                    .write_record(&record)
-                    .with_context(|| Error::ErrorDurringWrite)
-                    .with_context(|| anyhow!("File {}", input.clone()))?;
-            }
-        }
+        set_nb_threads(threads);
     }
+
+    let record_buffer = if let Some(len) = params.record_buffer {
+        len
+    } else {
+        8192
+    };
+
+    let solid =
+        cli::read_or_compute_solidity(params.solidity, params.kmer, &params.inputs, record_buffer)?;
+
+    kmrf::run_filter(params.inputs, params.outputs, solid, ratio, record_buffer)?;
 
     Ok(())
 }
