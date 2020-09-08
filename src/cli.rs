@@ -60,6 +60,13 @@ pub struct Command {
     pub ratio: Option<f64>,
 
     #[clap(
+        short = "l",
+        long = "min-length",
+        about = "if a read have length lower than this threshold read is filter out, default 1000"
+    )]
+    pub length: Option<usize>,
+
+    #[clap(
         short = "k",
         long = "kmer",
         about = "kmer length if you didn't provide solidity path you must give a kmer length"

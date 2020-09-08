@@ -35,7 +35,8 @@ pub fn run_filter(
     inputs: Vec<String>,
     outputs: Vec<String>,
     solid: pcon::solid::Solid,
-    threshold: f64,
+    ratio: f64,
+    length: usize,
     record_buffer_len: usize,
 ) -> Result<()> {
     for (input, output) in inputs.iter().zip(outputs) {
@@ -72,7 +73,8 @@ pub fn run_filter(
             let keeped: Vec<_> = records
                 .par_iter()
                 .filter_map(|record| {
-                    if record.seq().len() < solid.k as usize {
+                    let l = record.seq().len();
+                    if l < length || l < solid.k as usize {
                         return None;
                     }
 
@@ -87,9 +89,9 @@ pub fn run_filter(
                         }
                     }
 
-                    let ratio = (nb_valid as f64) / (nb_kmer as f64);
+                    let r = (nb_valid as f64) / (nb_kmer as f64);
 
-                    if ratio >= threshold {
+                    if r >= ratio {
                         Some(record)
                     } else {
                         None

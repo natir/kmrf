@@ -46,6 +46,12 @@ fn main() -> Result<()> {
         0.9
     };
 
+    let length = if let Some(val) = params.length {
+        val
+    } else {
+        1000
+    };
+
     if let Some(threads) = params.threads {
         log::info!("Set number of threads to {}", threads);
 
@@ -61,7 +67,14 @@ fn main() -> Result<()> {
     let solid =
         cli::read_or_compute_solidity(params.solidity, params.kmer, &params.inputs, record_buffer)?;
 
-    kmrf::run_filter(params.inputs, params.outputs, solid, ratio, record_buffer)?;
+    kmrf::run_filter(
+        params.inputs,
+        params.outputs,
+        solid,
+        ratio,
+        length,
+        record_buffer,
+    )?;
 
     Ok(())
 }
