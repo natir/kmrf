@@ -26,6 +26,7 @@ pub mod error;
 
 /* crates use */
 use anyhow::{anyhow, Context, Result};
+use rayon::iter::ParallelBridge;
 use rayon::prelude::*;
 
 /* local use */
@@ -71,7 +72,8 @@ pub fn run_filter(
             log::info!("Buffer len: {}", records.len());
 
             let keeped: Vec<_> = records
-                .par_iter()
+                .drain(..)
+                .par_bridge()
                 .filter_map(|record| {
                     let l = record.seq().len();
                     if l < length || l < solid.k as usize {
