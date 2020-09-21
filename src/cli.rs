@@ -36,59 +36,66 @@ use crate::error::*;
 )]
 pub struct Command {
     #[clap(
-        short = "s",
+        short = 's',
         long = "solidity",
         about = "solidity bitfield produce by pcon"
     )]
     pub solidity: Option<String>,
 
-    #[clap(short = "i", long = "inputs", about = "fasta file to be correct")]
+    #[clap(short = 'i', long = "inputs", about = "fasta file to be correct")]
     pub inputs: Vec<String>,
 
     #[clap(
-        short = "o",
+        short = 'o',
         long = "outputs",
         about = "path where corrected read was write"
     )]
     pub outputs: Vec<String>,
 
     #[clap(
-        short = "r",
+        short = 'a',
+        long = "abundance",
+        about = "if you want choose the minimum abundance you can set this parameter"
+    )]
+    pub abundance: Option<u8>,
+
+    #[clap(
+        short = 'r',
         long = "ratio",
         about = "if a ratio of correct kmer on all kmer is lower than this threshold read is filter out, default 0.8"
     )]
     pub ratio: Option<f64>,
 
     #[clap(
-        short = "l",
+        short = 'l',
         long = "min-length",
         about = "if a read have length lower than this threshold read is filter out, default 1000"
     )]
     pub length: Option<usize>,
 
     #[clap(
-        short = "k",
+        short = 'k',
         long = "kmer",
         about = "kmer length if you didn't provide solidity path you must give a kmer length"
     )]
     pub kmer: Option<u8>,
 
     #[clap(
-        short = "t",
+        short = 't',
         long = "threads",
         about = "Number of thread use by br, 0 use all avaible core, default value 0"
     )]
     pub threads: Option<usize>,
 
     #[clap(
-        short = "b",
+        short = 'b',
         long = "record_buffer",
         about = "Number of sequence record load in buffer, default 8192"
     )]
     pub record_buffer: Option<usize>,
 
     #[clap(
-        short = "v",
+        short = 'v',
         long = "verbosity",
         parse(from_occurrences),
         about = "verbosity level also control by environment variable BR_LOG if flag is set BR_LOG value is ignored"
@@ -112,6 +119,7 @@ pub fn read_or_compute_solidity(
     kmer: Option<u8>,
     inputs: &Vec<String>,
     record_buffer_len: usize,
+    abundance: Option<u8>,
 ) -> Result<pcon::solid::Solid> {
     if let Some(solidity_path) = solidity_path {
         let solidity_reader = std::io::BufReader::new(
@@ -137,12 +145,22 @@ pub fn read_or_compute_solidity(
         }
         log::info!("End count kmer from input");
 
-        let abundance =
-            cocktail::curve::found_first_local_min(pcon::dump::compute_spectrum(&counter))
-                .ok_or(Error::CantComputeAbundance)?;
-        log::info!("Min abundance is {}", abundance);
+        let hist_data = pcon::dump::compute_spectrum(&counter);
 
-        Ok(pcon::solid::Solid::from_counter(&counter, abundance as u8))
+        let abun = if let Some(a) = abundance {
+            a
+        } else {
+            let abundance = cocktail::curve::found_first_local_min(&hist_data)
+                .ok_or(Error::CantComputeAbundance)?;
+
+            cocktail::curve::draw_hist(&hist_data, std::io::stdout(), Some(abundance))
+                .with_context(|| anyhow!("Error durring write of kmer histograme"))?;
+            println!("If this curve seems bad or minimum abundance choose (marked by *)  not apopriate set parameter -a");
+
+            abundance as u8
+        };
+
+        Ok(pcon::solid::Solid::from_counter(&counter, abun))
     } else {
         Err(Error::NoSolidityNoKmer)?
     }

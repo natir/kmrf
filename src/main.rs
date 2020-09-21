@@ -64,8 +64,13 @@ fn main() -> Result<()> {
         8192
     };
 
-    let solid =
-        cli::read_or_compute_solidity(params.solidity, params.kmer, &params.inputs, record_buffer)?;
+    let solid = cli::read_or_compute_solidity(
+        params.solidity,
+        params.kmer,
+        &params.inputs,
+        record_buffer,
+        params.abundance,
+    )?;
 
     kmrf::run_filter(
         params.inputs,
