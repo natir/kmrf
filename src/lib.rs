@@ -41,7 +41,7 @@ pub fn run_filter(
     record_buffer_len: usize,
 ) -> Result<()> {
     for (input, output) in inputs.iter().zip(outputs) {
-        log::info!("Read file {} write in {}", input, output);
+        log::info!("Start filter {} write in {}", input, output);
 
         let reader = bio::io::fasta::Reader::new(std::io::BufReader::new(
             std::fs::File::open(input)
@@ -114,6 +114,7 @@ pub fn run_filter(
                 break;
             }
         }
+        log::info!("End filter file {} write in {}", input, output);
     }
 
     Ok(())

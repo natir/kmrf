@@ -131,7 +131,7 @@ pub fn read_or_compute_solidity(
         log::info!("Load solidity file");
         Ok(pcon::solid::Solid::deserialize(solidity_reader)?)
     } else if let Some(kmer) = kmer {
-        let mut counter = pcon::counter::Counter::new(kmer, record_buffer_len);
+        let mut counter = pcon::counter::Counter::new(kmer);
 
         log::info!("Start count kmer from input");
         for input in inputs {
@@ -141,22 +141,27 @@ pub fn read_or_compute_solidity(
                     .with_context(|| anyhow!("File {:?}", input.clone()))?,
             );
 
-            counter.count_fasta(fasta);
+            counter.count_fasta(fasta, record_buffer_len);
         }
         log::info!("End count kmer from input");
 
-        let hist_data = pcon::dump::compute_spectrum(&counter);
+        log::info!("Start build spectrum from count");
+        let spectrum = pcon::spectrum::Spectrum::from_counter(&counter);
+        log::info!("End build spectrum from count");
 
         let abun = if let Some(a) = abundance {
             a
         } else {
-            let abundance = cocktail::curve::found_first_local_min(&hist_data)
+            log::info!("Start search threshold");
+            let abundance = spectrum
+                .get_threshold(pcon::spectrum::ThresholdMethod::FirstMinimum, 0.0)
                 .ok_or(Error::CantComputeAbundance)?;
 
-            cocktail::curve::draw_hist(&hist_data, std::io::stdout(), Some(abundance))
+            spectrum
+                .write_histogram(std::io::stdout(), Some(abundance))
                 .with_context(|| anyhow!("Error durring write of kmer histograme"))?;
-            println!("If this curve seems bad or minimum abundance choose (marked by *)  not apopriate set parameter -a");
-
+            println!("If this curve seems bad or minimum abundance choose (marked by *) not apopriate set parameter -a");
+            log::info!("End search threshold");
             abundance as u8
         };
 

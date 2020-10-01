@@ -31,12 +31,12 @@ fn main() -> Result<()> {
 
     if let Some(level) = cli::i82level(params.verbosity) {
         env_logger::builder()
-            .format_timestamp(None)
+            .format_timestamp(Some(env_logger::fmt::TimestampPrecision::Millis))
             .filter_level(level.to_level_filter())
             .init();
     } else {
         env_logger::Builder::from_env("KMRF_LOG")
-            .format_timestamp(None)
+            .format_timestamp(Some(env_logger::fmt::TimestampPrecision::Millis))
             .init();
     }
 
