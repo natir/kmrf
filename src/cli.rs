@@ -167,6 +167,6 @@ pub fn read_or_compute_solidity(
 
         Ok(pcon::solid::Solid::from_counter(&counter, abun))
     } else {
-	Err(anyhow!(Error::NoSolidityNoKmer))
+        Err(anyhow!(Error::NoSolidityNoKmer))
     }
 }

@@ -39,8 +39,7 @@ WIP
 
 ## Evaluation
 
-To plot ![|solid kmer| / |total kmer|](https://render.githubusercontent.com/render/math?math=\frac{\left\lVert%20solid%20kmer%20\right\rVert}{\left\lVert%20all%20kmer%20\right\rVert}) against [badread](https://github.com/rrwick/Badread) *real* error rate.
-You need pandas, altair package install in your python environment.
+To plot ![|solid kmer| / |total kmer|](https://render.githubusercontent.com/render/math?math=\frac{\left\lVert%20solid%20kmer%20\right\rVert}{\left\lVert%20all%20kmer%20\right\rVert}) against [badread](https://github.com/rrwick/Badread) *real* error rate. You need badread reads in fasta format, pandas, altair package in your python environment and run this in kmrf directory:
 
 ```
 cargo run --release -- -i {badread_reads.fasta} -o /dev/null -s {pcon_solid_kmer_file} -vvvv 2>&1 | grep "DEBUG" | cut -d$' ' -f 4 > {out.csv}
