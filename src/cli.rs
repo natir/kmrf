@@ -117,7 +117,7 @@ pub fn i82level(level: i8) -> Option<Level> {
 pub fn read_or_compute_solidity(
     solidity_path: Option<String>,
     kmer: Option<u8>,
-    inputs: &Vec<String>,
+    inputs: &[String],
     record_buffer_len: usize,
     abundance: Option<u8>,
 ) -> Result<pcon::solid::Solid> {
@@ -167,6 +167,6 @@ pub fn read_or_compute_solidity(
 
         Ok(pcon::solid::Solid::from_counter(&counter, abun))
     } else {
-        Err(Error::NoSolidityNoKmer)?
+	Err(anyhow!(Error::NoSolidityNoKmer))
     }
 }
