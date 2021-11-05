@@ -22,7 +22,7 @@ SOFTWARE.
 
 /* crate use */
 use anyhow::Result;
-use clap::Clap;
+use clap::Parser;
 
 use kmrf::*;
 
