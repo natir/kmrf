@@ -1,3 +1,3 @@
 (function() {var implementors = {};
-implementors["kmrf"] = [{"text":"impl Debug for Command","synthetic":false,"types":[]},{"text":"impl Debug for Error","synthetic":false,"types":[]}];
+implementors["kmrf"] = [{"text":"impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.56.1/core/fmt/trait.Debug.html\" title=\"trait core::fmt::Debug\">Debug</a> for <a class=\"struct\" href=\"kmrf/cli/struct.Command.html\" title=\"struct kmrf::cli::Command\">Command</a>","synthetic":false,"types":["kmrf::cli::Command"]},{"text":"impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.56.1/core/fmt/trait.Debug.html\" title=\"trait core::fmt::Debug\">Debug</a> for <a class=\"enum\" href=\"kmrf/error/enum.Error.html\" title=\"enum kmrf::error::Error\">Error</a>","synthetic":false,"types":["kmrf::error::Error"]}];
 if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()
