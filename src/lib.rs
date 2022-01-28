@@ -43,17 +43,17 @@ pub fn run_filter(
     for (input, output) in inputs.iter().zip(outputs) {
         log::info!("Start filter {} write in {}", input, output);
 
-        let reader = bio::io::fasta::Reader::new(std::io::BufReader::new(
-            std::fs::File::open(input)
-                .with_context(|| Error::CantOpenFile)
-                .with_context(|| anyhow!("File {}", input.clone()))?,
-        ));
+        let mut reader = std::fs::File::open(input)
+            .with_context(|| Error::CantOpenFile)
+            .with_context(|| anyhow!("File {}", input.clone()))
+            .map(std::io::BufReader::new)
+            .map(noodles::fasta::Reader::new)?;
 
-        let mut write = bio::io::fasta::Writer::new(std::io::BufWriter::new(
-            std::fs::File::create(&output)
-                .with_context(|| Error::CantCreateFile)
-                .with_context(|| anyhow!("File {}", output.clone()))?,
-        ));
+        let mut writer = std::fs::File::create(&output)
+            .with_context(|| Error::CantCreateFile)
+            .with_context(|| anyhow!("File {}", output.clone()))
+            .map(std::io::BufWriter::new)
+            .map(noodles::fasta::Writer::new)?;
 
         let mut iter = reader.records();
         let mut records = Vec::with_capacity(record_buffer_len);
@@ -75,7 +75,7 @@ pub fn run_filter(
                 .drain(..)
                 .par_bridge()
                 .filter_map(|record| {
-                    let l = record.seq().len();
+                    let l = record.sequence().len();
                     if l < length || l < solid.k as usize {
                         return None;
                     }
@@ -83,7 +83,9 @@ pub fn run_filter(
                     let mut nb_kmer = 0;
                     let mut nb_valid = 0;
 
-                    for cano in cocktail::tokenizer::Canonical::new(record.seq(), solid.k) {
+                    for cano in
+                        cocktail::tokenizer::Canonical::new(record.sequence().as_ref(), solid.k)
+                    {
                         nb_kmer += 1;
 
                         if solid.get_canonic(cano) {
@@ -102,7 +104,7 @@ pub fn run_filter(
                 .collect();
 
             for record in keeped {
-                write
+                writer
                     .write_record(&record)
                     .with_context(|| Error::ErrorDurringWrite)
                     .with_context(|| anyhow!("File {}", output.clone()))?

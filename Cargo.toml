@@ -13,7 +13,7 @@ name = "kmrf"
 path = "src/main.rs"
 
 [dependencies]
-bio            = "0.39"
+noodles        = { version = "0.18", features = ["fasta"] }
 cocktail       = { git = "https://github.com/natir/cocktail.git" }
 pcon	       = { git = "https://github.com/natir/pcon.git" }
 
@@ -24,7 +24,7 @@ rayon           = "1"
 niffler	       = { version = "2", features = ["bz2", "lzma", "gz"] }
 
 # CLI management
-clap           = "3.0.0-beta.5"
+clap           = "3"
 
 # Logging and error management
 log 	       = "0.4"

@@ -31,74 +31,47 @@ use crate::error::*;
 #[clap(
     version = "0.1",
     author = "Pierre Marijon <pierre.marijon@hhu.de>",
-    about = "KmRF: Kmer based Read Filter"
+    about = "KMRF: Kmer based Read Filter"
 )]
 pub struct Command {
-    #[clap(
-        short = 's',
-        long = "solidity",
-        about = "solidity bitfield produce by pcon"
-    )]
+    /// solidity bitfield produce by pcon
+    #[clap(short = 's', long = "solidity")]
     pub solidity: Option<String>,
 
-    #[clap(short = 'i', long = "inputs", about = "fasta file to be correct")]
+    /// fasta file to be correct
+    #[clap(short = 'i', long = "inputs")]
     pub inputs: Vec<String>,
 
-    #[clap(
-        short = 'o',
-        long = "outputs",
-        about = "path where corrected read was write"
-    )]
+    /// path where corrected read was write
+    #[clap(short = 'o', long = "outputs")]
     pub outputs: Vec<String>,
 
-    #[clap(
-        short = 'a',
-        long = "abundance",
-        about = "if you want choose the minimum abundance you can set this parameter"
-    )]
+    /// if you want choose the minimum abundance you can set this parameter
+    #[clap(short = 'a', long = "abundance")]
     pub abundance: Option<u8>,
 
-    #[clap(
-        short = 'r',
-        long = "ratio",
-        about = "if a ratio of correct kmer on all kmer is lower than this threshold read is filter out, default 0.8"
-    )]
+    /// if a ratio of correct kmer on all kmer is lower than this threshold read is filter out, default 0.8
+    #[clap(short = 'r', long = "ratio")]
     pub ratio: Option<f64>,
 
-    #[clap(
-        short = 'l',
-        long = "min-length",
-        about = "if a read have length lower than this threshold read is filter out, default 1000"
-    )]
+    /// if a read have length lower than this threshold read is filter out, default 1000
+    #[clap(short = 'l', long = "min-length")]
     pub length: Option<usize>,
 
-    #[clap(
-        short = 'k',
-        long = "kmer",
-        about = "kmer length if you didn't provide solidity path you must give a kmer length"
-    )]
+    /// kmer length if you didn't provide solidity path you must give a kmer length
+    #[clap(short = 'k', long = "kmer")]
     pub kmer: Option<u8>,
 
-    #[clap(
-        short = 't',
-        long = "threads",
-        about = "Number of thread use by br, 0 use all avaible core, default value 0"
-    )]
+    /// Number of thread use by br, 0 use all avaible core, default value 0
+    #[clap(short = 't', long = "threads")]
     pub threads: Option<usize>,
 
-    #[clap(
-        short = 'b',
-        long = "record_buffer",
-        about = "Number of sequence record load in buffer, default 8192"
-    )]
+    /// Number of sequence record load in buffer, default 8192
+    #[clap(short = 'b', long = "record_buffer")]
     pub record_buffer: Option<usize>,
 
-    #[clap(
-        short = 'v',
-        long = "verbosity",
-        parse(from_occurrences),
-        about = "verbosity level also control by environment variable BR_LOG if flag is set BR_LOG value is ignored"
-    )]
+    /// verbosity level also control by environment variable BR_LOG if flag is set BR_LOG value is ignored
+    #[clap(short = 'v', long = "verbosity", parse(from_occurrences))]
     pub verbosity: i8,
 }
 
