@@ -48,7 +48,7 @@ cargo run --release -- -i {badread_reads.fasta} -o /dev/null -s {pcon_solid_kmer
 
 ## Minimum supported Rust version
 
-Currently the minimum supported Rust version is 1.45.0.
+Currently the minimum supported Rust version is 1.57.0.
 
 ## Citation
 
