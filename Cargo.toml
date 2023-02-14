@@ -1,41 +1,54 @@
 [package]
 name = "kmrf"
 version = "0.1.0"
-authors = ["Pierre Marijon <pierre.marijon@hhu.de>"]
+authors = ["Pierre Marijon <pierre@marijon.fr>"]
 edition = "2021"
+description = "Kmer base Read Filter"
+rust-version = "1.65"
 
-[lib]
-name = "kmrf"
-crate-type = ["rlib", "cdylib", "staticlib"]
+homepage = "https://github.com/natir/kmrf"
+repository = "https://github.com/natir/kmrf"
+documentation = "https://natir.github.io/kmrf/kmrf"
 
-[[bin]]
-name = "kmrf"
-path = "src/main.rs"
+readme = "Readme.md"
+license-file = "LICENSE"
+
 
 [dependencies]
-noodles        = { version = "0.18", features = ["fasta"] }
 cocktail       = { git = "https://github.com/natir/cocktail.git" }
 pcon	       = { git = "https://github.com/natir/pcon.git" }
 
-# parallel
-rayon           = "1"
-
-# input output management
-niffler	       = { version = "2", features = ["bz2", "lzma", "gz"] }
+# multi-threading management
+rayon           = { version = "1", optional = true }
 
 # CLI management
-clap           = "3"
+clap           = { version = "4", features = ["derive"] }
+
+# Error management
+thiserror      = { version = "1" }
+anyhow         = { version = "1"}
 
 # Logging and error management
-log 	       = "0.4"
-anyhow         = "1"
-thiserror      = "1"
-env_logger     = "0.9"
+log            = { version = "0.4" }
+stderrlog      = { version = "0.5" }
+
+# IO management
+niffler        = { version = "2" }
+noodles        = { version = "0.31", features = ["fasta"] }
+
+[features]
+default  = []
+parallel = ["pcon/parallel", "dep:rayon"]
+
 
 [profile.release]
-#debug = true # uncomment for profiling
 lto = 'thin'
 opt-level = 3
 overflow-checks = false
 panic = 'abort'
 incremental = false
+
+
+[profile.profiling]
+inherits = "release"
+debug = true

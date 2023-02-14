@@ -1,131 +1,157 @@
-/*
-Copyright (c) 2020 Pierre Marijon <pierre.marijon@hhu.de>
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
- */
-
 /* local mod */
 pub mod cli;
 pub mod error;
 
 /* crates use */
-use anyhow::{anyhow, Context, Result};
-use rayon::iter::ParallelBridge;
+#[cfg(feature = "parallel")]
 use rayon::prelude::*;
 
 /* local use */
-use error::*;
 
-pub fn run_filter(
-    inputs: Vec<String>,
-    outputs: Vec<String>,
+pub struct Filter {
     solid: pcon::solid::Solid,
     ratio: f64,
     length: usize,
-    record_buffer_len: usize,
-) -> Result<()> {
-    for (input, output) in inputs.iter().zip(outputs) {
-        log::info!("Start filter {} write in {}", input, output);
+}
 
-        let mut reader = std::fs::File::open(input)
-            .with_context(|| Error::CantOpenFile)
-            .with_context(|| anyhow!("File {}", input.clone()))
-            .map(std::io::BufReader::new)
-            .map(noodles::fasta::Reader::new)?;
+impl Filter {
+    pub fn new(solid: pcon::solid::Solid, ratio: f64, length: usize) -> Self {
+        Filter {
+            solid,
+            ratio,
+            length,
+        }
+    }
+}
 
-        let mut writer = std::fs::File::create(&output)
-            .with_context(|| Error::CantCreateFile)
-            .with_context(|| anyhow!("File {}", output.clone()))
-            .map(std::io::BufWriter::new)
-            .map(noodles::fasta::Writer::new)?;
-
+#[cfg(feature = "parallel")]
+impl Filter {
+    pub fn filter_fasta<W>(
+        &self,
+        input: Box<dyn std::io::BufRead>,
+        output: W,
+        record_buffer: u64,
+    ) -> error::Result<()>
+    where
+        W: std::io::Write,
+    {
+        let mut reader = noodles::fasta::Reader::new(input);
         let mut iter = reader.records();
-        let mut records = Vec::with_capacity(record_buffer_len);
+        let mut records = Vec::with_capacity(record_buffer as usize);
 
-        let mut end = false;
-        loop {
-            for _ in 0..record_buffer_len {
-                if let Some(Ok(record)) = iter.next() {
-                    records.push(record);
-                } else {
-                    end = true;
-                    break;
-                }
-            }
+        let mut writer = noodles::fasta::Writer::new(output);
 
-            log::info!("Buffer len: {}", records.len());
+        let mut end = true;
+        while end {
+            log::info!("Start populate buffer");
+            end = populate_buffer(&mut iter, &mut records, record_buffer);
+            log::info!("End populate buffer {}", records.len());
 
-            let keeped: Vec<_> = records
-                .drain(..)
-                .par_bridge()
-                .filter_map(|record| {
-                    let l = record.sequence().len();
-                    if l < length || l < solid.k as usize {
-                        return None;
-                    }
-
-                    let mut nb_kmer = 0;
-                    let mut nb_valid = 0;
-
-                    for cano in
-                        cocktail::tokenizer::Canonical::new(record.sequence().as_ref(), solid.k)
+            log::info!("Start perform filter of records");
+            let filter: Vec<&noodles::fasta::Record> = records
+                .par_iter()
+                .map(|record| {
+                    if record.sequence().len() > self.solid.k() as usize
+                        || record.sequence().len() > self.length
                     {
-                        nb_kmer += 1;
+                        let mut nb_kmer = 0;
+                        let mut nb_valid = 0;
 
-                        if solid.get_canonic(cano) {
-                            nb_valid += 1;
+                        for cano in cocktail::tokenizer::Canonical::new(
+                            record.sequence().as_ref(),
+                            self.solid.k(),
+                        ) {
+                            nb_kmer += 1;
+
+                            if self.solid.get_canonic(cano) {
+                                nb_valid += 1;
+                            }
                         }
-                    }
 
-                    let r = (nb_valid as f64) / (nb_kmer as f64);
+                        let r = (nb_valid as f64) / (nb_kmer as f64);
 
-                    if r >= ratio {
-                        Some(record)
+                        if r >= self.ratio {
+                            Some(record)
+                        } else {
+                            None
+                        }
                     } else {
                         None
                     }
                 })
+                .flatten()
                 .collect();
+            log::info!("End perform filter of records");
 
-            for record in keeped {
-                writer
-                    .write_record(&record)
-                    .with_context(|| Error::ErrorDurringWrite)
-                    .with_context(|| anyhow!("File {}", output.clone()))?
+            log::info!("Start write correct records");
+            for record in filter {
+                writer.write_record(record)?;
             }
-
-            records.clear();
-
-            if end {
-                break;
-            }
+            log::info!("Start write correct records");
         }
-        log::info!("End filter file {} write in {}", input, output);
-    }
 
-    Ok(())
+        Ok(())
+    }
 }
 
-/// Set the number of threads use by count step
-pub fn set_nb_threads(nb_threads: usize) {
-    rayon::ThreadPoolBuilder::new()
-        .num_threads(nb_threads)
-        .build_global()
-        .unwrap();
+#[cfg(feature = "parallel")]
+/// Populate record buffer with content of iterator
+pub fn populate_buffer(
+    iter: &mut noodles::fasta::reader::Records<'_, Box<dyn std::io::BufRead>>,
+    records: &mut Vec<noodles::fasta::Record>,
+    record_buffer: u64,
+) -> bool {
+    records.clear();
+
+    for i in 0..record_buffer {
+        if let Some(Ok(record)) = iter.next() {
+            records.push(record);
+        } else {
+            records.truncate(i as usize);
+            return false;
+        }
+    }
+
+    true
+}
+
+#[cfg(not(feature = "parallel"))]
+impl Filter {
+    pub fn filter_fasta<R, W>(&self, input: R, output: W) -> error::Result<()>
+    where
+        R: std::io::BufRead,
+        W: std::io::Write,
+    {
+        let mut reader = noodles::fasta::Reader::new(input);
+        let mut records = reader.records();
+
+        let mut writer = noodles::fasta::Writer::new(output);
+
+        while let Some(Ok(record)) = records.next() {
+            if record.sequence().len() > self.solid.k() as usize
+                || record.sequence().len() > self.length
+            {
+                let mut nb_kmer = 0;
+                let mut nb_valid = 0;
+
+                for cano in
+                    cocktail::tokenizer::Canonical::new(record.sequence().as_ref(), self.solid.k())
+                {
+                    nb_kmer += 1;
+
+                    if self.solid.get_canonic(cano) {
+                        nb_valid += 1;
+                    }
+                }
+
+                let r = (nb_valid as f64) / (nb_kmer as f64);
+
+                if r >= self.ratio {
+                    writer.write_record(&record)?;
+                }
+            }
+        }
+
+        Ok(())
+    }
 }

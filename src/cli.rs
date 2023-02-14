@@ -1,144 +1,190 @@
-/*
-Copyright (c) 2020 Pierre Marijon <pierre.marijon@hhu.de>
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
- */
+/* std use */
+use std::io::Read as _;
 
 /* crate use */
-use anyhow::{anyhow, Context, Result};
-use log::Level;
 
 /* local use */
-use crate::error::*;
+use crate::error;
 
 #[derive(clap::Parser, Debug)]
 #[clap(
     version = "0.1",
-    author = "Pierre Marijon <pierre.marijon@hhu.de>",
+    author = "Pierre Marijon <pierre@marijon.fr>",
     about = "KMRF: Kmer based Read Filter"
 )]
+#[clap(propagate_version = true)]
 pub struct Command {
-    /// solidity bitfield produce by pcon
+    /* Generic argument */
+    #[cfg(feature = "parallel")]
+    /// Number of theard use 0 use all avaible core, default value 0
+    #[clap(short = 't', long = "threads")]
+    threads: Option<usize>,
+
+    /// Silence all output
+    #[clap(short = 'q', long = "quiet")]
+    quiet: bool,
+
+    /// Verbose mode (-v, -vv, -vvv, etc)
+    #[clap(short = 'v', long = "verbosity", action = clap::ArgAction::Count)]
+    verbosity: u8,
+
+    /// Timestamp (sec, ms, ns, none)
+    #[clap(short = 'T', long = "timestamp")]
+    ts: Option<stderrlog::Timestamp>,
+
+    /* specific argument */
+    /// Path to solidity bitfield produce by pcon
     #[clap(short = 's', long = "solidity")]
-    pub solidity: Option<String>,
+    pub solidity: Option<std::path::PathBuf>,
 
-    /// fasta file to be correct
+    /// Path to fasta file to be correct
     #[clap(short = 'i', long = "inputs")]
-    pub inputs: Vec<String>,
+    pub inputs: Option<Vec<std::path::PathBuf>>,
 
-    /// path where corrected read was write
+    /// Path where corrected read was write in fasta format
     #[clap(short = 'o', long = "outputs")]
-    pub outputs: Vec<String>,
+    pub outputs: Option<std::path::PathBuf>,
 
-    /// if you want choose the minimum abundance you can set this parameter
+    /// If you want choose the minimum abundance you can set this parameter
     #[clap(short = 'a', long = "abundance")]
-    pub abundance: Option<u8>,
+    pub abundance: Option<pcon::CountTypeNoAtomic>,
 
-    /// if a ratio of correct kmer on all kmer is lower than this threshold read is filter out, default 0.8
+    /// If a ratio of correct kmer on all kmer is lower than this threshold read is filter out, default 0.8
     #[clap(short = 'r', long = "ratio")]
     pub ratio: Option<f64>,
 
-    /// if a read have length lower than this threshold read is filter out, default 1000
+    /// If a read have length lower than this threshold read is filter out, default 1000
     #[clap(short = 'l', long = "min-length")]
     pub length: Option<usize>,
 
-    /// kmer length if you didn't provide solidity path you must give a kmer length
-    #[clap(short = 'k', long = "kmer")]
-    pub kmer: Option<u8>,
-
-    /// Number of thread use by br, 0 use all avaible core, default value 0
-    #[clap(short = 't', long = "threads")]
-    pub threads: Option<usize>,
+    /// Kmer length if you didn't provide solidity path you must give a kmer length
+    #[clap(short = 'k', long = "kmer-size")]
+    pub kmer_size: Option<u8>,
 
     /// Number of sequence record load in buffer, default 8192
     #[clap(short = 'b', long = "record_buffer")]
-    pub record_buffer: Option<usize>,
-
-    /// verbosity level also control by environment variable BR_LOG if flag is set BR_LOG value is ignored
-    #[clap(short = 'v', long = "verbosity", parse(from_occurrences))]
-    pub verbosity: i8,
+    pub record_buffer: Option<u64>,
 }
 
-pub fn i82level(level: i8) -> Option<Level> {
-    match level {
-        std::i8::MIN..=0 => None,
-        1 => Some(log::Level::Error),
-        2 => Some(log::Level::Warn),
-        3 => Some(log::Level::Info),
-        4 => Some(log::Level::Debug),
-        5..=std::i8::MAX => Some(log::Level::Trace),
+impl Command {
+    #[cfg(feature = "parallel")]
+    /// Get number of thread
+    pub fn threads(&self) -> usize {
+        self.threads.unwrap_or(0)
     }
-}
 
-pub fn read_or_compute_solidity(
-    solidity_path: Option<String>,
-    kmer: Option<u8>,
-    inputs: &[String],
-    record_buffer_len: usize,
-    abundance: Option<u8>,
-) -> Result<pcon::solid::Solid> {
-    if let Some(solidity_path) = solidity_path {
-        let solidity_reader = std::io::BufReader::new(
-            std::fs::File::open(&solidity_path)
-                .with_context(|| Error::CantOpenFile)
-                .with_context(|| anyhow!("File {:?}", solidity_path.clone()))?,
-        );
+    /// Get verbosity level
+    pub fn verbosity(&self) -> usize {
+        self.verbosity as usize
+    }
 
-        log::info!("Load solidity file");
-        Ok(pcon::solid::Solid::deserialize(solidity_reader)?)
-    } else if let Some(kmer) = kmer {
-        let mut counter = pcon::counter::Counter::new(kmer);
+    /// Get quiet
+    pub fn quiet(&self) -> bool {
+        self.quiet
+    }
 
-        log::info!("Start count kmer from input");
-        for input in inputs {
-            let fasta = std::io::BufReader::new(
-                std::fs::File::open(&input)
-                    .with_context(|| Error::CantOpenFile)
-                    .with_context(|| anyhow!("File {:?}", input.clone()))?,
-            );
+    /// Get timestamp granularity
+    pub fn timestamp(&self) -> stderrlog::Timestamp {
+        self.ts.unwrap_or(stderrlog::Timestamp::Off)
+    }
 
-            counter.count_fasta(fasta, record_buffer_len);
+    /// Get inputs
+    pub fn input(&self) -> error::Result<Box<dyn std::io::BufRead>> {
+        match &self.inputs {
+            None => Ok(Box::new(std::io::stdin().lock())),
+            Some(paths) => {
+                let mut handle: Box<dyn std::io::Read> = Box::new(std::io::Cursor::new(vec![]));
+
+                for path in paths {
+                    let (file, _compression) =
+                        niffler::get_reader(Box::new(std::fs::File::open(path)?))?;
+                    handle = Box::new(handle.chain(file));
+                }
+
+                Ok(Box::new(std::io::BufReader::new(handle)))
+            }
         }
-        log::info!("End count kmer from input");
-
-        log::info!("Start build spectrum from count");
-        let spectrum = pcon::spectrum::Spectrum::from_counter(&counter);
-        log::info!("End build spectrum from count");
-
-        let abun = if let Some(a) = abundance {
-            a
-        } else {
-            log::info!("Start search threshold");
-            let abundance = spectrum
-                .get_threshold(pcon::spectrum::ThresholdMethod::FirstMinimum, 0.0)
-                .ok_or(Error::CantComputeAbundance)?;
-
-            spectrum
-                .write_histogram(std::io::stdout(), Some(abundance))
-                .with_context(|| anyhow!("Error durring write of kmer histograme"))?;
-            println!("If this curve seems bad or minimum abundance choose (marked by *) not apopriate set parameter -a");
-            log::info!("End search threshold");
-            abundance as u8
-        };
-
-        Ok(pcon::solid::Solid::from_counter(&counter, abun))
-    } else {
-        Err(anyhow!(Error::NoSolidityNoKmer))
     }
+
+    /// Get output
+    pub fn output(&self) -> error::Result<Box<dyn std::io::Write + std::marker::Send>> {
+        match &self.outputs {
+            None => Ok(Box::new(std::io::BufWriter::new(std::io::stdout()))),
+            Some(path) => create(path),
+        }
+    }
+
+    /// Get abundance
+    pub fn abundance(&self) -> pcon::CountTypeNoAtomic {
+        self.abundance.unwrap_or(0)
+    }
+
+    /// Get ratio
+    pub fn ratio(&self) -> f64 {
+        self.ratio.unwrap_or(0.8)
+    }
+
+    /// Get length
+    pub fn length(&self) -> usize {
+        self.length.unwrap_or(1000)
+    }
+
+    /// Get record_buffer
+    pub fn record_buffer(&self) -> u64 {
+        self.record_buffer.unwrap_or(8192)
+    }
+
+    /// Read or compute solidity
+    pub fn solidity(&self) -> error::Result<pcon::solid::Solid> {
+        if let Some(solidity_path) = &self.solidity {
+            log::info!("Load solidity file");
+            pcon::solid::Solid::from_path(solidity_path)
+        } else if let Some(kmer_size) = self.kmer_size {
+            let mut counter = pcon::counter::Counter::<pcon::CountType>::new(kmer_size);
+
+            log::info!("Start count kmer from input");
+            counter.count_fasta(self.input()?, self.record_buffer());
+            log::info!("End count kmer from input");
+
+            log::info!("Start build spectrum from count");
+            #[cfg(feature = "parallel")]
+            let spectrum = pcon::spectrum::Spectrum::from_count(&counter.raw_noatomic());
+            #[cfg(not(feature = "parallel"))]
+            let spectrum = pcon::spectrum::Spectrum::from_count(&counter.raw());
+            log::info!("End build spectrum from count");
+
+            let abundance = if let Some(abundance) = self.abundance {
+                abundance
+            } else {
+                log::info!("Start search threshold");
+                let value = spectrum
+                    .get_threshold(pcon::spectrum::ThresholdMethod::FirstMinimum, 0.0)
+                    .ok_or(error::Error::CantComputeAbundance)?;
+                log::info!("End search threshold");
+
+                value
+            };
+
+            #[cfg(feature = "parallel")]
+            let solid =
+                pcon::solid::Solid::from_count(kmer_size, counter.raw_noatomic(), abundance);
+            #[cfg(not(feature = "parallel"))]
+            let solid = pcon::solid::Solid::from_count(kmer_size, counter.raw(), abundance);
+
+            Ok(solid)
+        } else {
+            Err(error::Error::NoSolidityNoKmer.into())
+        }
+    }
+}
+
+fn create<P>(path: P) -> error::Result<Box<dyn std::io::Write + std::marker::Send>>
+where
+    P: std::convert::AsRef<std::path::Path>,
+{
+    let file = std::fs::File::create(path)?;
+    let buffer = std::io::BufWriter::new(file);
+    let boxed = Box::new(buffer);
+
+    Ok(boxed)
 }
